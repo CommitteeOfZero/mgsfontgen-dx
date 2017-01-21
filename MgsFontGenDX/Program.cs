@@ -10,7 +10,7 @@ namespace MgsFontGenDX
     {
         private const int DefaultFontSize = 36;
         private const int DefaultBaselineOriginX = 1;
-        private const int DefaultBaselineOriginY = -10;
+        private const int DefaultBaselineOriginY = -4;
 
         private const string OutputName = "FONT";
         private const string OutlineName = "font-outline";
