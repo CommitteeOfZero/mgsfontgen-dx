@@ -117,7 +117,7 @@ namespace MgsFontGenDX
                 }
                 else
                 {
-                    layout.Draw(_outlineRenderer, 0, 0);
+                    layout.Draw(_outlineRenderer, _baselineOrigin.X, _baselineOrigin.Y);
                 }
 
                 _widths[_idxCurrent] = Measure(character, layout);
