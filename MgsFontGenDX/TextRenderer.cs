@@ -127,22 +127,14 @@ namespace MgsFontGenDX
 
         private byte Measure(string character, TextLayout layout)
         {
-            byte result = (byte)(Math.Ceiling(layout.Metrics.WidthIncludingTrailingWhitespace / WidthMultiplier) + 1);
-            
-            // Special character, appears in RINE.
-            if (character.Contains("̑"))
-            {
-                result = 20;
-            }
-
-            return result;
+            return  (byte)(Math.Ceiling(layout.Metrics.WidthIncludingTrailingWhitespace / WidthMultiplier) + 1);
         }
 
         private void DrawCompoundCharacter(string compoundCharacter)
         {
 
             var old = DeviceContext.Transform;
-            if (!IsSuperscript(compoundCharacter[0]))
+            if (NeedToScale(compoundCharacter))
             {
                 var transform = Matrix3x2.Multiply(Matrix3x2.Transformation((float)1 / compoundCharacter.Length, 1.0f, 0.0f, 0.0f, 0.0f), DeviceContext.Transform);
                 DeviceContext.Transform = transform;
@@ -152,10 +144,10 @@ namespace MgsFontGenDX
             DeviceContext.Transform = old;
         }
 
-        private bool IsSuperscript(char c)
+        private bool NeedToScale(string compoundCharacter)
         {
-            var category = CharUnicodeInfo.GetUnicodeCategory(c);
-            return category == UnicodeCategory.ModifierLetter || category == UnicodeCategory.OtherNumber || category == UnicodeCategory.SpaceSeparator;
+            var category = CharUnicodeInfo.GetUnicodeCategory(compoundCharacter[0]);
+            return !(category == UnicodeCategory.ModifierLetter || category == UnicodeCategory.OtherNumber || category == UnicodeCategory.SpaceSeparator);
         }
 
         private void DrawGridLines()
