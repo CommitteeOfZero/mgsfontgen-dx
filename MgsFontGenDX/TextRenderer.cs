@@ -60,7 +60,7 @@ namespace MgsFontGenDX
 
             DeviceContext.Target = target;
             using (_textFormat = new TextFormat(DWriteFactory, fontFamily, FontWeight.Regular, FontStyle.Normal, FontStretch.Normal, fontSize))
-            using (_outlineRenderer = new OutlineRenderer(DeviceContext, WhiteBrush))
+            using (_outlineRenderer = new OutlineRenderer(DeviceContext))
             {
                 _textFormat.WordWrapping = WordWrapping.NoWrap;
 

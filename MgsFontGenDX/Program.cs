@@ -70,7 +70,7 @@ namespace MgsFontGenDX
 
                 byte[] _;
                 var outline = textRenderer.GenerateBitmapFont(charset, compoundCharTable, arguments.ImageFormat, out _,
-                    true, arguments.FontFamily, arguments.FontSize, arguments.BaselineOriginX, arguments.BaselineOriginY);
+                    true, arguments.FontFamily, arguments.FontSize, arguments.BaselineOriginX + 4, arguments.BaselineOriginY);
 
                 font.CopyTo(outputFile);
                 font.Dispose();

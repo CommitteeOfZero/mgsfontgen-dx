@@ -1,6 +1,7 @@
 ﻿using SharpDX;
 using SharpDX.Direct2D1;
 using SharpDX.DirectWrite;
+using System;
 
 namespace MgsFontGenDX
 {
@@ -8,13 +9,11 @@ namespace MgsFontGenDX
     {
         readonly SharpDX.Direct2D1.Factory _factory;
         readonly RenderTarget _surface;
-        readonly Brush _brush;
 
-        public OutlineRenderer(RenderTarget surface, Brush brush)
+        public OutlineRenderer(RenderTarget surface)
         {
             _factory = surface.Factory;
             _surface = surface;
-            _brush = brush;
         }
 
         public override Result DrawGlyphRun(object clientDrawingContext, float baselineOriginX, float baselineOriginY, MeasuringMode measuringMode, GlyphRun glyphRun, GlyphRunDescription glyphRunDescription, ComObject clientDrawingEffect)
@@ -23,15 +22,24 @@ namespace MgsFontGenDX
             using (GeometrySink sink = path.Open())
             {
                 glyphRun.FontFace.GetGlyphRunOutline(glyphRun.FontSize, glyphRun.Indices, glyphRun.Advances, glyphRun.Offsets, glyphRun.IsSideways, false, sink);
-
                 sink.Close();
 
-                var matrix = Matrix3x2.Translation(baselineOriginX, baselineOriginY);
-                TransformedGeometry transformedGeometry = new TransformedGeometry(_factory, path, matrix);
-
-                _surface.DrawGeometry(transformedGeometry, _brush);
-
+                var translation = Matrix3x2.Translation(baselineOriginX, baselineOriginY);
+                var outline = new TransformedGeometry(_factory, path, translation);
+                using (var strokeStyle = new StrokeStyle(_factory, new StrokeStyleProperties { LineJoin = LineJoin.Round }))
+                {
+                    for (int i = 1; i < 8; i++)
+                    {
+                        var color = Color.White;
+                        color.A /= (byte)Math.Ceiling(i / 1.5);
+                        using (var brush = new SolidColorBrush(_surface, color))
+                        {
+                            _surface.DrawGeometry(outline, brush, i, strokeStyle);
+                        }
+                    }
+                }
             }
+
             return new Result();
         }
     }
