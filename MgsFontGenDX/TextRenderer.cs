@@ -12,8 +12,10 @@ namespace MgsFontGenDX
     public sealed class TextRenderer : RendererBase
     {
         private const int ColumnCount = 64;
-        private const int CellWidth = 48;
-        private const int CellHeight = 48;
+        private const int OutlineCellWidth = 57;
+        private const int OutlineCellHeight = 57;
+        private int CellWidth = 48;
+        private int CellHeight = 48;
         private const float Dpi = 96.0f;
         private const float WidthMultiplier = 1.5f;
 
@@ -35,6 +37,11 @@ namespace MgsFontGenDX
         public Stream GenerateBitmapFont(string characters, ImmutableDictionary<int, string> puaCharacters, ImageFormat format,
             out byte[] widths, bool drawOutline, string fontFamily, int fontSize, int baselineOriginX, int baselineOriginY)
         {
+            if (drawOutline)
+            {
+                CellWidth = OutlineCellWidth;
+                CellHeight = OutlineCellHeight;
+            }
             int rowCount = (int)Math.Ceiling((double)characters.Length / ColumnCount);
             int bitmapWidth = CellWidth * ColumnCount;
             int bitmapHeight = CellHeight * rowCount;
@@ -68,6 +75,7 @@ namespace MgsFontGenDX
 #if DEBUG
                 DrawGridLines();
 #endif
+
                 DeviceContext.Transform = Matrix3x2.Translation(offsetX, offsetY);
                 for (int i = 0; i < characters.Length; i += ColumnCount)
                 {
@@ -93,7 +101,7 @@ namespace MgsFontGenDX
             {
                 if (CharUnicodeInfo.GetUnicodeCategory(characters[i]) != UnicodeCategory.PrivateUse)
                 {
-                    DrawCharacter(characters[i].ToString());
+                    DrawCharacter(characters[i].ToString(), false);
                 }
                 else
                 {
@@ -107,7 +115,7 @@ namespace MgsFontGenDX
             DeviceContext.Transform = old;
         }
 
-        private void DrawCharacter(string character)
+        private void DrawCharacter(string character, bool stretched)
         {
             using (var layout = new TextLayout(DWriteFactory, character, _textFormat, CellWidth, CellHeight))
             {
@@ -120,27 +128,32 @@ namespace MgsFontGenDX
                     layout.Draw(_outlineRenderer, _baselineOrigin.X, _baselineOrigin.Y);
                 }
 
-                _widths[_idxCurrent] = Measure(character, layout);
+                _widths[_idxCurrent] = Measure(character, layout, stretched);
                 _idxCurrent++;
             }
         }
 
-        private byte Measure(string character, TextLayout layout)
+        private byte Measure(string character, TextLayout layout, bool stretched)
         {
-            return  (byte)(Math.Ceiling(layout.Metrics.WidthIncludingTrailingWhitespace / WidthMultiplier) + 1);
+            double multiplier = stretched ? WidthMultiplier * character.Length : WidthMultiplier;
+
+            return  (byte)(Math.Ceiling(layout.Metrics.WidthIncludingTrailingWhitespace / multiplier) + 1);
         }
 
         private void DrawCompoundCharacter(string compoundCharacter)
         {
 
             var old = DeviceContext.Transform;
+            bool stretched = false;
+
             if (NeedToScale(compoundCharacter))
             {
                 var transform = Matrix3x2.Multiply(Matrix3x2.Transformation((float)1 / compoundCharacter.Length, 1.0f, 0.0f, 0.0f, 0.0f), DeviceContext.Transform);
                 DeviceContext.Transform = transform;
+                stretched = true;
             }
 
-            DrawCharacter(compoundCharacter);
+            DrawCharacter(compoundCharacter, stretched);
             DeviceContext.Transform = old;
         }
 
@@ -157,7 +170,13 @@ namespace MgsFontGenDX
             {
                 for (int col = 0; col < ColumnCount; col++)
                 {
-                    DeviceContext.DrawRectangle(new RectangleF(col * CellWidth, row * CellHeight, CellWidth, CellHeight), RedBrush);
+                    var bounds = new RectangleF(col * CellWidth, row * CellHeight, CellWidth, CellHeight);
+                    if (_drawOutline)
+                    {
+                        // shitty workaround - for some reason it doesn't show up on the outline otherwise
+                        bounds.Y -= DeviceContext.PixelSize.Height;
+                    }
+                    DeviceContext.DrawRectangle(bounds, RedBrush);
                 }
             }
         }
