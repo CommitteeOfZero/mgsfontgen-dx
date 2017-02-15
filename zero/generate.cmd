@@ -1,1 +1,1 @@
-..\bin\Debug\mgsfontgen-dx generate --charset .\Charset.utf8 --compound-characters .\CompoundCharacters.tbl --font-family "Noto Sans CJK JP" --image-format dds
+..\bin\Release\mgsfontgen-dx generate --charset .\Charset.utf8 --compound-characters .\CompoundCharacters.tbl --font-family "Noto Sans CJK JP" --image-format dds
