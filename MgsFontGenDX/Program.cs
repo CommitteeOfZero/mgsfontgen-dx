@@ -52,32 +52,42 @@ namespace MgsFontGenDX
         private static void GenerateFont(Arguments arguments)
         {
             string extension = arguments.ImageFormat == ImageFormat.Png ? PngExtenstion : DdsExtension;
-            string outputFileName = OutputName + extension;
-            string outlineFileName = OutlineName + extension;
+
 
             var charset = File.ReadAllText(arguments.CharsetFileName);
             var compoundCharTable = ReadCompoundCharacterTable(arguments.CompoundCharTableFileName);
 
-            using (var outputFile = File.Create(outputFileName))
-            using (var outlineFile = File.Create(outlineFileName))
+            const int batchSize = 5440;
             using (var textRenderer = new TextRenderer())
             using (var widthTableFile = File.Create("widths.bin"))
             using (var widthWriter = new BinaryWriter(widthTableFile))
             {
-                byte[] widths;
-                var font = textRenderer.GenerateBitmapFont(charset, compoundCharTable, arguments.ImageFormat, out widths,
-                    false, arguments.FontFamily, arguments.FontSize, arguments.BaselineOriginX, arguments.BaselineOriginY);
+                int batchCount = (int)Math.Ceiling((double)charset.Length / batchSize);
+                for (int i = 0; i < batchCount; i++)
+                {
+                    string batch = charset.Substring(i * batchSize, Math.Min((i + 1) * batchSize, charset.Length - i  * batchSize));
+                    string fontFileName = OutputName + $"_{(char)('A' + i)}" + extension;
+                    string outlineFileName = OutlineName + $"_{(char)('A' + i)}" + extension;
 
-                byte[] _;
-                var outline = textRenderer.GenerateBitmapFont(charset, compoundCharTable, arguments.ImageFormat, out _,
-                    true, arguments.FontFamily, arguments.FontSize, arguments.BaselineOriginX + 4, arguments.BaselineOriginY + 4);
+                    using (var outputFile = File.Create(fontFileName))
+                    using (var outlineFile = File.Create(outlineFileName))
+                    {
+                        byte[] widths_batch;
+                        var font = textRenderer.GenerateBitmapFont(batch, compoundCharTable, arguments.ImageFormat, out widths_batch,
+                            false, arguments.FontFamily, arguments.FontSize, arguments.BaselineOriginX, arguments.BaselineOriginY);
 
-                font.CopyTo(outputFile);
-                font.Dispose();
-                outline.CopyTo(outlineFile);
-                outline.Dispose();
+                        byte[] _;
+                        var outline = textRenderer.GenerateBitmapFont(batch, compoundCharTable, arguments.ImageFormat, out _,
+                            true, arguments.FontFamily, arguments.FontSize, arguments.BaselineOriginX + 4, arguments.BaselineOriginY + 4);
 
-                widthWriter.Write(widths);
+                        font.CopyTo(outputFile);
+                        font.Dispose();
+                        outline.CopyTo(outlineFile);
+                        outline.Dispose();
+
+                        widthWriter.Write(widths_batch);
+                    }
+                }
             }
         }
 

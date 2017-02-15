@@ -12,15 +12,17 @@ namespace MgsFontGenDX
     public sealed class TextRenderer : RendererBase
     {
         private const int ColumnCount = 64;
+        private const int NormalCellWidth = 48;
+        private const int NormalCellHeight = 48;
         private const int OutlineCellWidth = 57;
         private const int OutlineCellHeight = 57;
-        private int CellWidth = 48;
-        private int CellHeight = 48;
         private const float Dpi = 96.0f;
-        private const float WidthMultiplier = 1.5f;
+        private const float GameWidthMultiplier = 1.5f;
 
+        private int _cellWidth;
+        private int _cellHeight;
         private Guid _formatGuid;
-        private bool _drawOutline;
+        private bool _drawingOutline;
         private TextFormat _textFormat;
         private Vector2 _baselineOrigin;
         private ImmutableDictionary<int, string> _puaCharacters;
@@ -28,6 +30,9 @@ namespace MgsFontGenDX
         private OutlineRenderer _outlineRenderer;
         private byte[] _widths;
         private int _idxCurrent;
+
+        private SolidColorBrush _whiteBrush;
+        private SolidColorBrush _redBrush;
 
         public TextRenderer()
             : base()
@@ -37,16 +42,19 @@ namespace MgsFontGenDX
         public Stream GenerateBitmapFont(string characters, ImmutableDictionary<int, string> puaCharacters, ImageFormat format,
             out byte[] widths, bool drawOutline, string fontFamily, int fontSize, int baselineOriginX, int baselineOriginY)
         {
-            if (drawOutline)
-            {
-                CellWidth = OutlineCellWidth;
-                CellHeight = OutlineCellHeight;
-            }
+            _cellWidth = drawOutline ? OutlineCellWidth : NormalCellWidth;
+            _cellHeight = drawOutline ? OutlineCellHeight : NormalCellHeight;
             int rowCount = (int)Math.Ceiling((double)characters.Length / ColumnCount);
-            int bitmapWidth = CellWidth * ColumnCount;
-            int bitmapHeight = CellHeight * rowCount;
+            int bitmapWidth = _cellWidth * ColumnCount;
 
-            var bitmapProperties = new BitmapProperties1(Direct2DPixelFormat, Dpi, Dpi, BitmapOptions.Target);
+            int bitmapHeight = _cellHeight * rowCount;
+            int powerOfTwo = (int)Math.Pow(2, Math.Ceiling(Math.Log(bitmapHeight, 2)));
+            if (powerOfTwo - bitmapHeight < _cellHeight)
+            {
+                bitmapHeight = powerOfTwo;
+            }
+
+            var bitmapProperties = new BitmapProperties1(DevicePixelFormat, Dpi, Dpi, BitmapOptions.Target);
             var containerGuid = format == ImageFormat.Png ? ContainerFormatGuids.Png : ContainerFormatGuids.Dds;
             using (var fontBitmap = new Bitmap1(DeviceContext, new Size2(bitmapWidth, bitmapHeight), bitmapProperties))
             {
@@ -59,13 +67,15 @@ namespace MgsFontGenDX
         private void DrawCharacters(Bitmap1 target, string characters, ImmutableDictionary<int, string> puaCharacters,
             bool drawOutline, int offsetX, int offsetY, string fontFamily, int fontSize, int baselineOriginX, int baselineOriginY)
         {
-            _drawOutline = drawOutline;
+            _drawingOutline = drawOutline;
             _puaCharacters = puaCharacters;
             _baselineOrigin = new Vector2(baselineOriginX, baselineOriginY);
             _widths = new byte[characters.Length];
             _idxCurrent = 0;
 
             DeviceContext.Target = target;
+            DeviceContext.Transform = Matrix3x2.Identity;
+            CreateBrushes();
             using (_textFormat = new TextFormat(DWriteFactory, fontFamily, FontWeight.Regular, FontStyle.Normal, FontStretch.Normal, fontSize))
             using (_outlineRenderer = new OutlineRenderer(DeviceContext))
             {
@@ -84,14 +94,27 @@ namespace MgsFontGenDX
 
                     DrawRow(currentRow);
 
-                    var transform = Matrix3x2.Multiply(DeviceContext.Transform, Matrix3x2.Translation(0, CellHeight));
+                    var transform = Matrix3x2.Multiply(DeviceContext.Transform, Matrix3x2.Translation(0, _cellHeight));
                     DeviceContext.Transform = transform;
                 }
 
                 DeviceContext.EndDraw();
             }
 
+            DestroyBrushes();
             DeviceContext.Target = null;
+        }
+
+        private void CreateBrushes()
+        {
+            _whiteBrush = new SolidColorBrush(DeviceContext, Color.White);
+            _redBrush = new SolidColorBrush(DeviceContext, Color.Red);
+        }
+
+        private void DestroyBrushes()
+        {
+            _whiteBrush.Dispose();
+            _redBrush.Dispose();
         }
 
         private void DrawRow(string characters)
@@ -108,7 +131,7 @@ namespace MgsFontGenDX
                     DrawCompoundCharacter(_puaCharacters[char.ConvertToUtf32(characters, i)]);
                 }
 
-                var transform = Matrix3x2.Multiply(DeviceContext.Transform, Matrix3x2.Translation(CellWidth, 0));
+                var transform = Matrix3x2.Multiply(DeviceContext.Transform, Matrix3x2.Translation(_cellWidth, 0));
                 DeviceContext.Transform = transform;
             }
 
@@ -117,11 +140,11 @@ namespace MgsFontGenDX
 
         private void DrawCharacter(string character, bool stretched)
         {
-            using (var layout = new TextLayout(DWriteFactory, character, _textFormat, CellWidth, CellHeight))
+            using (var layout = new TextLayout(DWriteFactory, character, _textFormat, _cellWidth, _cellHeight))
             {
-                if (!_drawOutline)
+                if (!_drawingOutline)
                 {
-                    DeviceContext.DrawTextLayout(_baselineOrigin, layout, WhiteBrush);
+                    DeviceContext.DrawTextLayout(_baselineOrigin, layout, _whiteBrush);
                 }
                 else
                 {
@@ -135,48 +158,43 @@ namespace MgsFontGenDX
 
         private byte Measure(string character, TextLayout layout, bool stretched)
         {
-            double multiplier = stretched ? WidthMultiplier * character.Length : WidthMultiplier;
-
+            double multiplier = stretched ? GameWidthMultiplier * character.Length : GameWidthMultiplier;
             return  (byte)(Math.Ceiling(layout.Metrics.WidthIncludingTrailingWhitespace / multiplier) + 1);
         }
 
         private void DrawCompoundCharacter(string compoundCharacter)
         {
-
-            var old = DeviceContext.Transform;
+            var oldTransform = DeviceContext.Transform;
             bool stretched = false;
 
-            if (NeedToScale(compoundCharacter))
+            if (NeedsStretching(compoundCharacter))
             {
-                var transform = Matrix3x2.Multiply(Matrix3x2.Transformation((float)1 / compoundCharacter.Length, 1.0f, 0.0f, 0.0f, 0.0f), DeviceContext.Transform);
+                var scale = Matrix3x2.Transformation((float)1 / compoundCharacter.Length, 1.0f, 0.0f, 0.0f, 0.0f);
+                var transform = Matrix3x2.Multiply(scale, DeviceContext.Transform);
                 DeviceContext.Transform = transform;
                 stretched = true;
             }
 
             DrawCharacter(compoundCharacter, stretched);
-            DeviceContext.Transform = old;
+            DeviceContext.Transform = oldTransform;
         }
 
-        private bool NeedToScale(string compoundCharacter)
+        private bool NeedsStretching(string compoundCharacter)
         {
+            char first = compoundCharacter[0];
             var category = CharUnicodeInfo.GetUnicodeCategory(compoundCharacter[0]);
             return !(category == UnicodeCategory.ModifierLetter || category == UnicodeCategory.OtherNumber || category == UnicodeCategory.SpaceSeparator);
         }
 
         private void DrawGridLines()
         {
-            int rowCount = DeviceContext.PixelSize.Height / CellHeight;
+            int rowCount = DeviceContext.PixelSize.Height / _cellHeight;
             for (int row = 0; row < rowCount; row++)
             {
                 for (int col = 0; col < ColumnCount; col++)
                 {
-                    var bounds = new RectangleF(col * CellWidth, row * CellHeight, CellWidth, CellHeight);
-                    if (_drawOutline)
-                    {
-                        // shitty workaround - for some reason it doesn't show up on the outline otherwise
-                        bounds.Y -= DeviceContext.PixelSize.Height;
-                    }
-                    DeviceContext.DrawRectangle(bounds, RedBrush);
+                    var bounds = new RectangleF(col * _cellWidth, row * _cellHeight, _cellWidth, _cellHeight);
+                    DeviceContext.DrawRectangle(bounds, _redBrush);
                 }
             }
         }
@@ -188,12 +206,12 @@ namespace MgsFontGenDX
             {
                 _formatGuid = bitmapDecoder.ContainerFormat;
                 var frame = bitmapDecoder.GetFrame(0);
-                converter.Initialize(frame, WicPixelFormat);
+                converter.Initialize(frame, ImagePixelFormat);
 
                 var props = new BitmapProperties1()
                 {
                     BitmapOptions = BitmapOptions.Target,
-                    PixelFormat = Direct2DPixelFormat
+                    PixelFormat = DevicePixelFormat
                 };
 
                 return SharpDX.Direct2D1.Bitmap1.FromWicBitmap(DeviceContext, converter, props);
@@ -209,12 +227,12 @@ namespace MgsFontGenDX
                 using (var frameEncode = new BitmapFrameEncode(bitmapEncoder))
                 {
                     frameEncode.Initialize();
-                    var wicPixelFormat = WicPixelFormat;
+                    var wicPixelFormat = ImagePixelFormat;
                     frameEncode.SetPixelFormat(ref wicPixelFormat);
 
                     var imageParams = new ImageParameters()
                     {
-                        PixelFormat = Direct2DPixelFormat,
+                        PixelFormat = DevicePixelFormat,
                         DpiX = Dpi,
                         DpiY = Dpi,
                         PixelWidth = bitmap.PixelSize.Width,
