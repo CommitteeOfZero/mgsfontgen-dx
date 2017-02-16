@@ -235,3 +235,7 @@ _Pvt_Extensions
 # FAKE - F# Make
 .fake/
 /zero/widths.bin
+/zero/font-outline_A.dds
+/zero/font-outline_B.dds
+/zero/FONT_A.dds
+/zero/FONT_B.dds

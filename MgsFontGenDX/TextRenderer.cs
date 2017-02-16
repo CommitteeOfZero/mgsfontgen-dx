@@ -46,13 +46,7 @@ namespace MgsFontGenDX
             _cellHeight = drawOutline ? OutlineCellHeight : NormalCellHeight;
             int rowCount = (int)Math.Ceiling((double)characters.Length / ColumnCount);
             int bitmapWidth = _cellWidth * ColumnCount;
-
-            int bitmapHeight = _cellHeight * rowCount;
-            int powerOfTwo = (int)Math.Pow(2, Math.Ceiling(Math.Log(bitmapHeight, 2)));
-            if (powerOfTwo - bitmapHeight < _cellHeight)
-            {
-                bitmapHeight = powerOfTwo;
-            }
+            int bitmapHeight = 4 * (int)Math.Ceiling((double)_cellHeight * rowCount / 4);
 
             var bitmapProperties = new BitmapProperties1(DevicePixelFormat, Dpi, Dpi, BitmapOptions.Target);
             var containerGuid = format == ImageFormat.Png ? ContainerFormatGuids.Png : ContainerFormatGuids.Dds;
