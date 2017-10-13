@@ -118,11 +118,19 @@ namespace MgsFontGenDX
             {
                 if (CharUnicodeInfo.GetUnicodeCategory(characters[i]) != UnicodeCategory.PrivateUse)
                 {
-                    DrawCharacter(characters[i].ToString(), false);
+                    var ch = characters[i].ToString();
+                    using (var layout = new TextLayout(DWriteFactory, ch, _textFormat, _cellWidth, _cellHeight))
+                    {
+                        DrawCharacter(ch, false, layout);
+                    }
                 }
                 else
                 {
-                    DrawCompoundCharacter(_puaCharacters[char.ConvertToUtf32(characters, i)]);
+                    var ch = _puaCharacters[char.ConvertToUtf32(characters, i)];
+                    using (var layout = new TextLayout(DWriteFactory, ch, _textFormat, _cellWidth, _cellHeight))
+                    {
+                        DrawCompoundCharacter(ch, layout);
+                    }
                 }
 
                 var transform = Matrix3x2.Multiply(DeviceContext.Transform, Matrix3x2.Translation(_cellWidth, 0));
@@ -132,22 +140,19 @@ namespace MgsFontGenDX
             DeviceContext.Transform = old;
         }
 
-        private void DrawCharacter(string character, bool stretched)
+        private void DrawCharacter(string character, bool stretched, TextLayout layout)
         {
-            using (var layout = new TextLayout(DWriteFactory, character, _textFormat, _cellWidth, _cellHeight))
+            if (!_drawingOutline)
             {
-                if (!_drawingOutline)
-                {
-                    DeviceContext.DrawTextLayout(_baselineOrigin, layout, _whiteBrush);
-                }
-                else
-                {
-                    layout.Draw(_outlineRenderer, _baselineOrigin.X, _baselineOrigin.Y);
-                }
-
-                _widths[_idxCurrent] = Measure(character, layout, stretched);
-                _idxCurrent++;
+                DeviceContext.DrawTextLayout(_baselineOrigin, layout, _whiteBrush);
             }
+            else
+            {
+                layout.Draw(_outlineRenderer, _baselineOrigin.X, _baselineOrigin.Y);
+            }
+
+            _widths[_idxCurrent] = Measure(character, layout, stretched);
+            _idxCurrent++;
         }
 
         private byte Measure(string character, TextLayout layout, bool stretched)
@@ -156,12 +161,12 @@ namespace MgsFontGenDX
             return  (byte)(Math.Ceiling(layout.Metrics.WidthIncludingTrailingWhitespace / multiplier) + 1);
         }
 
-        private void DrawCompoundCharacter(string compoundCharacter)
+        private void DrawCompoundCharacter(string compoundCharacter, TextLayout layout)
         {
             var oldTransform = DeviceContext.Transform;
             bool stretched = false;
 
-            if (NeedsStretching(compoundCharacter))
+            if (NeedsStretching(compoundCharacter, layout))
             {
                 var scale = Matrix3x2.Transformation((float)1 / compoundCharacter.Length, 1.0f, 0.0f, 0.0f, 0.0f);
                 var transform = Matrix3x2.Multiply(scale, DeviceContext.Transform);
@@ -169,15 +174,13 @@ namespace MgsFontGenDX
                 stretched = true;
             }
 
-            DrawCharacter(compoundCharacter, stretched);
+            DrawCharacter(compoundCharacter, stretched, layout);
             DeviceContext.Transform = oldTransform;
         }
 
-        private bool NeedsStretching(string compoundCharacter)
+        private bool NeedsStretching(string compoundCharacter, TextLayout layout)
         {
-            char first = compoundCharacter[0];
-            var category = CharUnicodeInfo.GetUnicodeCategory(compoundCharacter[0]);
-            return !(category == UnicodeCategory.ModifierLetter || category == UnicodeCategory.OtherNumber || category == UnicodeCategory.SpaceSeparator);
+            return Measure(compoundCharacter, layout, false) > NormalCellWidth / GameWidthMultiplier;
         }
 
         private void DrawGridLines()
