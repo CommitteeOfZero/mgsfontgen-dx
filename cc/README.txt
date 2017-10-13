@@ -1,0 +1,1 @@
+This charset is currently not suitable for the Japanese version or script editing because the Japanese area has not been checked yet.
