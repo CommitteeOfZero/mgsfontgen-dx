@@ -116,21 +116,19 @@ namespace MgsFontGenDX
             var old = DeviceContext.Transform;
             for (int i = 0; i < characters.Length; i++)
             {
+                string ch;
                 if (CharUnicodeInfo.GetUnicodeCategory(characters[i]) != UnicodeCategory.PrivateUse)
                 {
-                    var ch = characters[i].ToString();
-                    using (var layout = new TextLayout(DWriteFactory, ch, _textFormat, _cellWidth, _cellHeight))
-                    {
-                        DrawCharacter(ch, false, layout);
-                    }
+                    ch = characters[i].ToString();
                 }
                 else
                 {
-                    var ch = _puaCharacters[char.ConvertToUtf32(characters, i)];
-                    using (var layout = new TextLayout(DWriteFactory, ch, _textFormat, _cellWidth, _cellHeight))
-                    {
-                        DrawCompoundCharacter(ch, layout);
-                    }
+                    ch = _puaCharacters[char.ConvertToUtf32(characters, i)];
+                }
+
+                using (var layout = new TextLayout(DWriteFactory, ch, _textFormat, _cellWidth, _cellHeight))
+                {
+                    DrawCharacter(ch, layout);
                 }
 
                 var transform = Matrix3x2.Multiply(DeviceContext.Transform, Matrix3x2.Translation(_cellWidth, 0));
@@ -140,8 +138,19 @@ namespace MgsFontGenDX
             DeviceContext.Transform = old;
         }
 
-        private void DrawCharacter(string character, bool stretched, TextLayout layout)
+        private void DrawCharacter(string character, TextLayout layout)
         {
+            var oldTransform = DeviceContext.Transform;
+
+            int gameCellWidth = (int)(NormalCellWidth / GameWidthMultiplier);
+            float charWidth = layout.Metrics.WidthIncludingTrailingWhitespace;
+            int gameCharWidth = (int)Math.Ceiling(charWidth / GameWidthMultiplier) + 1;
+
+            float widthScale = Math.Min((float)gameCellWidth / gameCharWidth, 1);
+            var scale = Matrix3x2.Transformation(widthScale, 1.0f, 0.0f, 0.0f, 0.0f);
+            var transform = Matrix3x2.Multiply(scale, DeviceContext.Transform);
+            DeviceContext.Transform = transform;
+
             if (!_drawingOutline)
             {
                 DeviceContext.DrawTextLayout(_baselineOrigin, layout, _whiteBrush);
@@ -151,36 +160,10 @@ namespace MgsFontGenDX
                 layout.Draw(_outlineRenderer, _baselineOrigin.X, _baselineOrigin.Y);
             }
 
-            _widths[_idxCurrent] = Measure(character, layout, stretched);
+            _widths[_idxCurrent] = (byte)Math.Min(gameCharWidth, gameCellWidth);
             _idxCurrent++;
-        }
 
-        private byte Measure(string character, TextLayout layout, bool stretched)
-        {
-            double multiplier = stretched ? GameWidthMultiplier * character.Length : GameWidthMultiplier;
-            return  (byte)(Math.Ceiling(layout.Metrics.WidthIncludingTrailingWhitespace / multiplier) + 1);
-        }
-
-        private void DrawCompoundCharacter(string compoundCharacter, TextLayout layout)
-        {
-            var oldTransform = DeviceContext.Transform;
-            bool stretched = false;
-
-            if (NeedsStretching(compoundCharacter, layout))
-            {
-                var scale = Matrix3x2.Transformation((float)1 / compoundCharacter.Length, 1.0f, 0.0f, 0.0f, 0.0f);
-                var transform = Matrix3x2.Multiply(scale, DeviceContext.Transform);
-                DeviceContext.Transform = transform;
-                stretched = true;
-            }
-
-            DrawCharacter(compoundCharacter, stretched, layout);
             DeviceContext.Transform = oldTransform;
-        }
-
-        private bool NeedsStretching(string compoundCharacter, TextLayout layout)
-        {
-            return Measure(compoundCharacter, layout, false) > NormalCellWidth / GameWidthMultiplier;
         }
 
         private void DrawGridLines()
