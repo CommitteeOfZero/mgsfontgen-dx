@@ -11,6 +11,7 @@ namespace MgsFontGenDX
         private const int DefaultFontSize = 38;
         private const int DefaultBaselineOriginX = 1;
         private const int DefaultBaselineOriginY = -7;
+        private const int DefaultCharsetSize = 5440;
 
         private const string OutputName = "FONT";
         private const string OutlineName = "font-outline";
@@ -55,8 +56,8 @@ namespace MgsFontGenDX
             var charset = File.ReadAllText(arguments.CharsetFileName);
             var compoundCharTable = ReadCompoundCharacterTable(arguments.CompoundCharTableFileName);
 
-            const int batchSize_outline = 4544;//5440;
-            const int batchSize_font = 5440;
+            var batchSize_outline = arguments.CharsetSize;//5440;
+            var batchSize_font = arguments.CharsetSize;//5440;
             using (var textRenderer = new TextRenderer())
             using (var widthTableFile = File.Create("widths.bin"))
             using (var widthWriter = new BinaryWriter(widthTableFile))
@@ -122,6 +123,7 @@ namespace MgsFontGenDX
             string strImageFormat;
             string strFontSize, strOffsetX, strOffsetY;
             string strBaselineOriginX, strBaselineOriginY;
+            string strCharsetSize;
             Arguments parsedArgs;
             try
             {
@@ -139,6 +141,7 @@ namespace MgsFontGenDX
                 dictionary.TryGetValue("offsety", out strOffsetY);
                 dictionary.TryGetValue("baseline-originx", out strBaselineOriginX);
                 dictionary.TryGetValue("baseline-originy", out strBaselineOriginY);
+                dictionary.TryGetValue("charset-size", out strCharsetSize);
 
                 switch ("." + strImageFormat?.ToLowerInvariant())
                 {
@@ -158,6 +161,7 @@ namespace MgsFontGenDX
                 parsedArgs.OffsetY = int.Parse(strOffsetY ?? "0");
                 parsedArgs.BaselineOriginX = int.Parse(strBaselineOriginX ?? DefaultBaselineOriginX.ToString());
                 parsedArgs.BaselineOriginY = int.Parse(strBaselineOriginY ?? DefaultBaselineOriginY.ToString());
+                parsedArgs.CharsetSize = int.Parse(strCharsetSize ?? DefaultCharsetSize.ToString());
             }
             catch
             {
@@ -197,6 +201,7 @@ namespace MgsFontGenDX
             public int OffsetY { get; set; }
             public int BaselineOriginX { get; set; }
             public int BaselineOriginY { get; set; }
+            public int CharsetSize { get; set; }
         }
 
         private static ImmutableDictionary<int, string> ReadCompoundCharacterTable(string fileName)
